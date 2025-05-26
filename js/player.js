@@ -1,36 +1,34 @@
 class Player {
     constructor(x, y, canvasWidth, canvasHeight) {
         // Position and dimensions
-        this.x = x; // Initial X position (center of the canvas)
-        this.y = y; // Initial Y position (near the bottom of the canvas)
-        this.width = 60; // Player's visual width (you can adjust this)
-        this.height = 80; // Player's visual height (you can adjust this)
+        this.x = x;
+        this.y = y;
+        this.width = 60; // Player's visual width
+        this.height = 80; // Player's visual height
 
         // Game mechanics properties
         this.fuel = 100; // Starting fuel level
         this.maxFuel = 100; // Maximum fuel capacity
-        this.speed = 300; // Player's horizontal movement speed (pixels per second)
+        this.speed = 300; // Player's horizontal movement speed for keyboard (pixels per second)
         this.bulletCooldown = 0.2; // Time in seconds between shots
         this.currentBulletCooldown = 0; // Current time until next shot is ready
 
-        // Input handling (from main.js touch events)
-        this.isMoving = false; // True when a touch is active
-        this.targetX = this.x; // The X coordinate the player is trying to reach
+        // Input handling (unified for touch and keyboard)
+        this.velocity = { x: 0 }; // Player's current horizontal velocity (pixels per second)
+        this.isMoving = false; // Flag for touch input (true when actively touching/swiping)
+        this.targetX = this.x; // Target X for smooth touch follow
 
-        // Canvas bounds (to prevent player from going off-screen)
+        // Canvas bounds
         this.canvasWidth = canvasWidth;
         this.canvasHeight = canvasHeight;
 
-        // Image for the player (load it in main.js and pass it, or load it here)
+        // Image for the player
         this.image = new Image();
-        this.image.src = 'assets/images/player_jet.png'; // Make sure this path is correct!
+        this.image.src = 'assets/images/player_jet.png'; // Path to your player image
         this.imageLoaded = false;
         this.image.onload = () => {
             this.imageLoaded = true;
         };
-
-        // For smooth movement and shooting rate
-        this.velocity = { x: 0 }; // Not directly used for swipe, but good for physics if needed
     }
 
     /**
@@ -38,18 +36,22 @@ class Player {
      * @param {number} deltaTime - Time elapsed since the last frame in seconds.
      */
     update(deltaTime) {
-        // --- Movement based on touch input ---
-        if (this.isMoving) {
-            // Calculate direction to targetX
-            const dx = this.targetX - this.x;
+        // --- Movement based on velocity (for keyboard) ---
+        // This takes effect if keyboard keys are held down
+        if (this.velocity.x !== 0) {
+            this.x += this.velocity.x * deltaTime;
+        }
 
-            // If player is far from target, move towards it smoothly
-            if (Math.abs(dx) > 5) { // A small threshold to prevent jitter near target
-                // Move towards targetX based on speed and delta time
-                // The 0.1 is a smoothing factor. Adjust as needed.
-                this.x += dx * 0.1;
+        // --- Movement based on touch input (overrides velocity if active) ---
+        // If 'isMoving' (from touchstart/touchmove) is true, player follows targetX
+        if (this.isMoving) {
+            const dx = this.targetX - this.x;
+            // Only apply touch movement if a significant difference exists to prevent jitter
+            if (Math.abs(dx) > 1) {
+                this.x += dx * 0.1 * this.speed / 200; // Smooth movement, adjust factor if needed
+                this.velocity.x = 0; // Reset velocity if touch is active to prevent conflicts
             } else {
-                this.x = this.targetX; // Snap to target if very close
+                this.x = this.targetX;
             }
         }
 
@@ -65,22 +67,13 @@ class Player {
         this.fuel -= 5 * deltaTime; // Consume 5 fuel per second
         if (this.fuel < 0) {
             this.fuel = 0; // Don't let fuel go negative
-            // Game over logic will check for this in main.js
         }
 
         // --- Bullet Cooldown ---
         if (this.currentBulletCooldown > 0) {
             this.currentBulletCooldown -= deltaTime;
         } else {
-            this.currentBulletCooldown = 0; // Ensure it doesn't go negative
-        }
-
-        // Auto-fire (if you want automatic shooting)
-        // If you want tap-to-fire, this would be triggered by a tap event in main.js
-        if (this.currentBulletCooldown === 0) {
-            // main.js will call a method on the player to shoot
-            // For now, let's just reset cooldown if we *could* fire
-            // this.shoot(); // This would usually be called from main.js on a condition
+            this.currentBulletCooldown = 0;
         }
     }
 
@@ -101,28 +94,14 @@ class Player {
     }
 
     /**
-     * Method to create a bullet (this will be called from main.js's game loop or input handler)
-     * Returns a new Bullet object or null if on cooldown.
+     * Method to create a bullet (called from main.js)
      */
     shoot() {
         if (this.currentBulletCooldown <= 0) {
             this.currentBulletCooldown = this.bulletCooldown;
-            // Return a new Bullet object (Bullet class will be in another file)
-            // Example: return new Bullet(this.x + this.width / 2, this.y);
-            return {
-                x: this.x + this.width / 2 - 2, // Center the bullet horizontally
-                y: this.y,
-                width: 4,
-                height: 10,
-                speed: 400, // Bullet speed
-                draw: function(ctx) {
-                    ctx.fillStyle = 'yellow';
-                    ctx.fillRect(this.x, this.y, this.width, this.height);
-                },
-                update: function(deltaTime) {
-                    this.y -= this.speed * deltaTime;
-                }
-            }; // This is a simplified bullet placeholder
+            // Create a new Bullet object (Bullet class is defined in bullets.js)
+            // Position the bullet at the player's top-center
+            return new Bullet(this.x + this.width / 2 - 2, this.y);
         }
         return null; // Cannot shoot due to cooldown
     }
@@ -143,9 +122,8 @@ class Player {
      * @param {number} damage - The amount of damage to take.
      */
     takeDamage(damage) {
-        // For Sky Squadron, damage likely means instant game over on collision
-        // But if you had a health bar, this is where you'd decrement it.
-        // For now, let's assume collision is game over, so this method might not be heavily used initially.
+        // For Sky Squadron (River Raid style), collision typically means instant game over.
+        // If you had a health bar, you'd decrement it here.
         console.log("Player took damage!");
     }
 }
